@@ -1,5 +1,5 @@
 import { HttpException, Injectable, HttpStatus } from '@nestjs/common';
-import { RegisterUserDto } from 'src/dtos/users/users.dto';
+import { RegisterUserDto, UpdateUserDto } from 'src/dtos/users/users.dto';
 import { PrismaService } from 'src/services/prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
@@ -96,6 +96,83 @@ export class UsersService {
                 throw error;
             }
             throw new HttpException('Error al obtener usuario', 500);
+        }
+    }
+
+    async updateUser(id: number, userData: UpdateUserDto) {
+        try {
+            // Verificar si el usuario existe
+            const existingUser = await this.prismaService.user.findUnique({
+                where: { id }
+            });
+
+            if (!existingUser) {
+                throw new HttpException(
+                    'Usuario no encontrado',
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            // Si se está actualizando el email, verificar que no esté en uso por otro usuario
+            if (userData.email) {
+                const emailInUse = await this.prismaService.user.findFirst({
+                    where: {
+                        email: userData.email,
+                        NOT: { id }
+                    }
+                });
+
+                if (emailInUse) {
+                    throw new HttpException(
+                        'El correo electrónico ya está en uso',
+                        HttpStatus.CONFLICT,
+                    );
+                }
+            }
+
+            // Si se está actualizando el teléfono, verificar que no esté en uso por otro usuario
+            if (userData.phone) {
+                const phoneInUse = await this.prismaService.user.findFirst({
+                    where: {
+                        phone: userData.phone,
+                        NOT: { id }
+                    }
+                });
+
+                if (phoneInUse) {
+                    throw new HttpException(
+                        'El número de teléfono ya está en uso',
+                        HttpStatus.CONFLICT,
+                    );
+                }
+            }
+
+            // Actualizar el usuario
+            const updatedUser = await this.prismaService.user.update({
+                where: { id },
+                data: userData,
+                select: {
+                    id: true,
+                    name: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    image: true,
+                    notification_token: true,
+                    created_at: true,
+                    updated_at: true
+                }
+            });
+
+            return {
+                message: 'Usuario actualizado correctamente',
+                user: updatedUser
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException('Error al actualizar usuario', HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
